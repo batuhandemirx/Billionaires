@@ -1,0 +1,1129 @@
+---
+title: "IST 347 ISTATISTIKSEL ANALIZ UYGULAMALARI FINAL SINAVI"
+author: "Batuhan Demir"
+output: word_document
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# 1. GIRIS
+
+
+## 1.1. Çözülen problem ve önemi ile ilgili bir paragraf açıklama
+## 1.2. Problemin cozumu surecinde veri ve analiz hakkinda aciklama
+
+Forbes tarafindan yayinlanan ve gunluk olarak guncellenen veri seti, her bir milyarderin guncel net degerini, siralamasini, servetinin bilesenlerini, bazi demografik bilgilerini ve diger finansal bilgileri icermektedir.  Veri setinin ana amaclarindan biri, dünyanın en zengin milyarderlerinin belgelenmis net degerini yillik olarak siralamaktir.
+
+
+Bu odev kapsaminda milyarderlerin dagilimlari farkli endustriler, ulkeler ve bolgelere gore incelenecektir. Milyarderlerin yas, cinsiyet ve dogum yerlerinin dagılimlari incelenecektir. Milyarderlerin icindeki kendi kendine milyarder olanlarin (self made) ve servetini miras alanlarin oranlari karsilastirilacaktir. Milyarderlerin yasadigi ulkelerin GDP, TÜFE gibi ekonomik gostergeleri incelenecek, bu gostergeler arasindaki iliskiler analiz edilecektir. "Mekansal analiz" ile, milyarderlerin dunya genelinde cografi dagilimi grafikler ile ozetlenecektir. 
+
+
+
+
+
+
+# 2. GEREKLI PAKETLER
+
+
+```{r, results='hide'}
+library(ggplot2) # grafiklerin ciziminde kullanildi
+library(stats)  # t.test, prop.test gibi istatistiksel testlerin ve islemlerin uygulanmasinda kullanildi
+```
+
+
+
+
+
+
+# VERININ YUKLENMESI
+
+Verinin cvs dosyasindan yuklenmesi:
+
+```{r}
+data <- read.csv("C:/Users/Desktop/Billionaires.csv", header = TRUE)
+dim(data)
+```
+
+Veri seti 35 degisken ve 2640 gozlemden olusmaktadir.
+
+
+
+Eklenen veri kumesinden rastgele 1000 kisi secimi:
+
+```{r}
+set.seed(42)
+df <- data[sample(x = nrow(data), size = 1000, replace = FALSE), ]
+dim(df)
+```
+
+Veri setinden yerine koymadan rasgele n = 1000 gozlemlik orneklem cekilmistir, df olarak adlandirilmistir.
+
+
+
+
+
+
+# 3. VERI HAZIRLAMA
+
+
+## 3.1. Veriyi açıklayınız. Değişken sayısı, gözlem sayısı, değişkenlerin yapısı hakkında bilgiler veriniz.
+
+Toplam eksik gozlem sayisi:
+
+```{r}
+sum(is.na(df))
+```
+
+
+
+Degiskenlerin tipi, eksik gozlem sayisi ve benzersiz gozlem sayilari:
+
+```{r}
+# class(df$rank) # "integer"
+# class(df["rank"]) # "data.frame"
+# class(df[ ,"rank"]) # "integer"
+
+
+# unique(df$rank)
+# unique(df[, "rank"])
+# length(unique(df[, "rank"])) # 146
+
+for (j in colnames(df)){
+  cat(match(j, colnames(df)), j, "-->", class(df[ ,j]), 
+      "(","missing =", sum(is.na(df[j])),
+      "/", "unique =", length(unique(df[, j])), ")", "\n")
+}
+```
+
+Bu listede "12 selfMade --> logical ( missing = 0 / unique = 2 )" satirini acarsak, selfMade degiskeni veri setinin 12. sutunudur, tipi logical'dır, eksik gozlemi yoktur, degisken 2 farkli deger almaktadir. Burada unique degerler, degiskenin aldigi farkli degerlerin sayisidir. Örneğin selfMade degiskeni dogru/yanlis olmak uzere 2 farkli deger alabilmektedir (unique = 2). Kategorik degiskenler incelenirken, degiskenin kac farklı kategorisi oldugu bilgisi gerekli olacak.
+
+
+
+## 3.2. Veri yukleme ve duzenlemesi konusunda bilgi veriniz.
+## 3.3. Verideki tum degiskenleri ozetleyip, yorumlayiniz.
+
+
+### Degiskenlerin incelenmesi
+
+
+rank, finalWorth, person name, lastName, firstName
+--> c(1, 2, 4, 16, 17)
+
+```{r}
+df[1:10, c(1, 2, 4, 16, 17)]
+```
+
+Verideki "personName" degiskeni, lastName ve firstName degiskenlerinin birlesimi.
+
+
+
+
+
+
+
+
+
+
+country(unique = 63), city(unique = 399), countryOfCitizenship(unique = 62), state(unique = 37), residenceStateRegion(unique = 6)
+--> c(6, 7, 10, 20, 21)
+
+```{r}
+df[1:6, c(6, 7, 20, 21, 10)]
+```
+
+country, city, state, residenceStateRegion degiskenleri milyonerlerin **ikamet** ettigi yerlesim bolgelerine ait verilerdir. 
+
+countryOfCitizenship ise **vatandasi** oldugu ulkedir.
+
+
+
+Yukaridaki tabloda city, state, residenceStateRegion degiskenlerinde eksik gozlemler var. Verinin ilk 21 degiskeni character tipinde degiskenler. Bu tipdeki degiskenlerin hepsinde eksik gozlem sayisi 0 gorunuyor. Numerik degiskenlerde ise eksik gozlemler var:
+
+```{r}
+for (j in colnames(df)){
+  cat(match(j, colnames(df)), j, "-->", class(df[ ,j]), 
+      "(","missing =", sum(is.na(df[j])), ")", "\n")
+}
+```
+
+Bu degiskenlerdeki eksik gozlemler tekrar incelenmeli.
+
+
+
+state degiskenin eksik gozlemlerinin incelenmesi:
+
+```{r}
+table(df$state, useNA = "always")
+```
+
+state sutununda 699 gozlem bos. R bu eksik gozlemleri kategorik degiskenin bir sinifi olarak algiliyor. Eksik gozlemlere NA atanmali.
+
+table() fonksiyonunda eksik veriler için belirtilebilecek 3 arguman vardir: "always", "ifany", "no" 
+
+sirasiyla: eksik gozlem sayisini her zaman yaz (eksik gozlem olmadiginda 0 yazar), eksik gozlem varsa yaz, eksik gozlem sayisini asla yazma
+
+
+
+Eksik gozlemlere NA atanmasi:
+
+eger/ifelse (state degiskenin degeri bos (df$state == "") ise, yerine NA ata, degilse kendi degerini (df$state) ata)
+
+```{r}
+df$state <- ifelse(df$state == "", NA, df$state)
+```
+
+```{r}
+sum(is.na(df$state))
+```
+
+
+Ilk 21 sutunun buyuk cogunlugu "chr" tipinde. 1 rank, 2 finalWorth, 5 age ve 12 selfMade sutunlari haric hepsi character tipi sutun.
+
+5. sutun olan "age" degiskeni integer. Bu degiskendeki eksik gozlemler dogru formatta. bos olan gozlem yok:
+
+```{r}
+table(df$age, useNA = "always")
+```
+
+
+Veride 12. sutun olan "selfMade" degiskeni ise logical. Bu degiskenin de ayri olarak incelenmesine karar verildi. Bu degiskende de bos gozlem yok:
+
+```{r}
+table(df$selfMade, useNA = "always")
+```
+
+
+
+Verinin ilk 21 sutunu icinde, 1, 2, 5 ve 12. sutunlar haric, tum sutunlar character tipinde. 
+
+apply() fonksiyonu yardimi ile character tipindeki sutunlarin eksik gozlemlerine NA atanmasi:
+
+```{r}
+my.NA <- function(x) {ifelse(x == "", NA, x)}
+
+df[, c(3, 4, 6:11, 13:21)] <- apply(df[, c(3, 4, 6:11, 13:21)], 2, my.NA)
+```
+
+apply() fonksiyonu bir dizi, matris veya dataframe üzerinde bir işlemi tekrarli olarak yapar. Ornegin bir dataframe'in tum sutunları icin tekrarlı olarak summary() komutunu uygular. Dataframe'de 5 sutun varsa 5 tane cikti olacaktir. MARGIN islemin satira, sutuna ya da ikisine birden yapilacagini belirler. 
+
+
+Fonksiyonun yapisi asagidaki gibidir, kaynak: https://r-coder.com/apply-r/ 
+
+
+apply fonksiyonu: apply(X = data, MARGIN = 2, FUN = Function to be applied)
+
+MARGIN argument, which is usually set to 1, 2 or c(1, 2)
+
+apply(X = df, MARGIN = 1, FUN = summary) # Summary for each row
+
+apply(X = df, MARGIN = 2, FUN = summary) # Summary for each column
+
+
+
+
+Verinin eksik gözlemleri:
+
+```{r}
+for (j in colnames(df)){
+  cat(match(j, colnames(df)), j, "-->", class(df[ ,j]), 
+      "(","missing =", sum(is.na(df[j])), ")", "\n")
+}
+```
+
+
+
+
+
+
+
+
+
+
+**Degiskenlerin incelenmesinin devami**
+
+
+age, birthDate, birthYear, birthMonth, birthDay
+--> c(5, 15, 22, 23, 24)
+
+```{r}
+df[1:10, c(5, 15, 22, 23, 24)]
+```
+
+birthDate degiskeni birthYear, birthMonth, birthDay' in birlesimi. 
+
+
+Verideki "date" isimli degisken "veri toplama tarihi"dir. Yapisi:
+
+19 date --> character ( missing = 0 / unique = 1 )
+
+date degiskeninin benzersiz gozlem sayisi 1' dir. Yani odev icin cekilen orneklemin tum gozlemlerinin toplanma tarihi aynidir:
+
+```{r}
+df[1:10, c(19, 5, 15)]
+```
+
+
+n = 2640 gozlemden olusan ilk veride date kac fakli deger alıyor:
+
+```{r}
+length(unique(data$date))
+```
+
+
+```{r}
+unique(data$date)
+```
+
+
+
+
+
+
+
+
+
+category(unique = 18), source(unique = 464), industries(unique = 18)
+--> c(3, 8, 9)
+
+```{r}
+df[1:10, c(3, 8, 9)]
+```
+
+Iki degisken ayni veriyi iceriyor olabilir:
+
+```{r}
+df[1:20, c(3, 9)]
+```
+
+
+identical {base}: iki nesnenin (vektor, matris, liste, vb.) birebir ayni olup olmadigini kontrol etmek icin kullanilir:
+
+```{r}
+identical(df$category, df$industries) 
+```
+
+Output = TRUE yani iki degisken birebir ayni verileri iceriyor.
+
+https://statorials.org/tr/rdeki-iki-vektoru-karsilastirin/
+
+
+
+
+
+
+organization(unique = 135), selfMade(unique = 2), status(unique = 6), title(unique = 57) 
+--> c(11, 12, 13, 18)
+
+```{r}
+df[1:10, c(11, 12, 13, 18)]
+```
+
+
+
+Sayisal degiskenler: c(25:35)
+
+```{r}
+df[1:10, c(25:30)]
+```
+
+gdp_country degiskeni hatali olarak "chr" tipinde atanmis. Sayi formatinda da degil, dolar isareti var. Kullanilabilmesi için once dolar isaretinin kaldirilmasi ve duzenlenmesi lazim.
+
+
+
+```{r}
+df[1:10, c(30:35)]
+```
+
+
+
+
+
+
+
+### Odevde kullanilacak degiskenler:
+
+
+finalWorth, age, country(unique = 63), industries(unique = 18), selfMade(unique = 2):
+
+```{r}
+df[1:10, c(2, 5, 6, 9, 12)]
+```
+
+
+**finalWorth**: Milyarderin Amerikan dolari cinsinden nihai net degeri.
+
+**country**: Milyarderin ikamet ettigi ulke.
+
+**industries**: Milyarderin is alanlariyla iliskilendirilen endustriler.
+
+**selfMade**: Milyarderin servetini kendi cabasi ile kazanip kazanmadigini belirten (True/False).
+
+
+
+status(unique = 6), gender(unique = 2), cpi_country, cpi_change_country, gdp_country:
+
+```{r}
+df[1:10, c(13, 14, 25, 26, 27)]
+```
+
+
+**status**: "D" kendi cabasiyla kazanilmis serveti temsil eder (Kurucular/Girisimciler), "U" ise miras veya kazanilmamis serveti gosterir.
+
+
+**cpi_country**: Milyarderin ulkesinin Tuketici Fiyat Endeksi (TUFE).
+
+
+**cpi_change_country**: Milyarderin ulkesindeki TUFE degisimi.
+
+
+**gdp_country**: Milyarderin ulkesinin Gayri Safi Yurtici Hasilasi (GSYIH).
+
+
+
+
+
+
+
+
+
+
+
+
+# 4. ANALIZ
+
+
+## 4.1. Servet dagilim analizi: Milyarderlerin servetinin farkli sektorlere(industries), ulkelere(country) ve bolgelere(residenceStateRegion) dagilimini kesfedin.
+
+
+Analiz edilecek degiskenlerin frekans tabloları apply() fonksiyonu yardimi ile 2 adimda olusturulmustur. Ilk adımda verilen bir kategorik degiskenin frekans tablosunu hazirlayan my.table() isimli bir fonksiyon olusturulmustur. Ikınci adimda apply() ile df' in belirtilen sutunlarına (MARGIN = 2) bu fonksiyon tekrarlı bir sekilde uygulanmistir:
+
+```{r}
+my.table <- function(x) {
+  n <- table(x, useNA = "ifany")
+  percent <- prop.table(n)*100
+  f_table <- cbind(n, percent)
+}
+
+# apply(df[c("industries", "country", "countryOfCitizenship","residenceStateRegion")], 2, my.table)
+# country(unique = 63) ve countryOfCitizenship(unique = 62) cok fazla sayida kategoriye sahip oldugundan frekans tablolarindan cikarilmistir.
+
+apply(df[c("industries", "residenceStateRegion")], 2, my.table)
+```
+
+
+
+
+
+
+
+
+### Milyonerlerin endustrilere gore dagilimi (industries, unique = 18):
+
+
+```{r}
+ggplot(df, aes(x = industries)) +
+  geom_bar(fill = "blue", width = 0.7) +
+  coord_flip() +  # Koordinatları çevirerek bar'ları yatay yapma (R CookBook 10.17)
+  labs(title = "Distribution of Millionaires by Industries", x = "Industries")
+```
+
+
+Bar grafigindeki bar'lar, milyonerlerin sayisini degilde oranlarini(percent) verirse daha okunur bir grafik olacaktir. Grafigin cizilebilmesi icin once degiskenin frekans tablosu olusturulmustur:
+
+```{r}
+df_industries <- as.data.frame(my.table(df$industries)) # industries' in frekans tablosunu dataframe olarak kaydet
+
+df_industries
+
+
+
+df_industries$industries <- rownames(df_industries) # satir isimlerini, industries sutunu olarak dataframe'e ekle
+
+df_industries
+```
+
+
+
+
+stat = "identity" argumani ile barlarin yuksekliginin "df_industries$percent" degiskeninden alinacagi bildirilir. (R CookBook 10.10)
+
+
+scale_y_continuous() fonksiyonu, y ekseninin (percent) daha sik isaretlenmesini sagladi (Cookbook for R->Graphs->Axes, http://www.cookbook-r.com/Graphs/Axes_(ggplot2)/)
+
+```{r}
+ggplot(df_industries, aes(x = industries, y = percent)) +
+  geom_bar(stat = "identity", fill = "blue", width = 0.7) +
+  coord_flip() +
+  labs(title = "Distribution of Millionaires by Industries", x = "Industries", y = "Percent(%)") +
+  scale_y_continuous(breaks = seq(0, max(df_industries$percent), by = 1)) 
+```
+
+
+
+
+
+
+
+
+
+
+
+
+### Milyonerlerin ikamet ettigi ulkeye gore dagilimi (country, unique = 63)
+
+
+Milyonerlerin ikamet ettigi ulkelerin frekans tablosu:
+
+```{r}
+df_country <- as.data.frame(my.table(df$country))
+df_country$country <- rownames(df_country)
+df_country <- df_country[df_country$country != "NA.", , drop = FALSE] # eksik degerler satirini siler
+df_country
+```
+
+
+Cok fazla ulke var. Dusuk sayida milyoner olan ulkeleri bir araya toplayarak daha okunur bir grafik elde edilebilir.
+
+
+**Milyonerlerin %1'inden azini barindiran ulkeler:**
+
+```{r}
+low_percent_rows2 <- df_country[df_country$percent < 1, ]
+low_percent_rows2
+```
+
+
+
+**Milyonerlerin %1'inden fazlasini barindiran ulkeler:**
+
+```{r}
+high_percent_rows2 <- df_country[!(df_country$percent < 1), ]
+high_percent_rows2
+```
+
+
+
+**Milyonerlerin %1'inden azini barindiran ulkeleri iceren "Other Countries" satirin olusturulmasi:**
+
+```{r}
+total_low_percent2 <- data.frame(
+  n = sum(low_percent_rows2$n),
+  percent = sum(low_percent_rows2$percent),
+  country = "Other Countries"
+)
+```
+
+
+
+**Milyonerlerin %1'inden fazlasini barindiran ulkeler ile yeni satirin birlestirilmesi:**
+
+```{r}
+df_country2 <- rbind(high_percent_rows2, total_low_percent2)
+df_country2
+```
+
+
+
+
+
+```{r}
+ggplot(df_country2, aes(x = country, y = percent)) +
+  geom_bar(stat = "identity", fill = "blue", width = 0.7) +
+  coord_flip() +
+  labs(title = "The distribution of millionaires by country of residence", x = "Country of Residence", y = "Percent(%)") +
+  scale_y_continuous(breaks = seq(0, max(df_country$percent), by = 2)) 
+```
+
+
+
+
+
+
+
+### USA'de ikamet eden milyonerlerin bolgelere gore dagilimi (residenceStateRegion, unique = 5)
+
+
+```{r}
+df_residenceStateRegion <- as.data.frame(my.table(df$residenceStateRegion))
+df_residenceStateRegion$Region <- rownames(df_residenceStateRegion)
+df_residenceStateRegion <- df_residenceStateRegion[df_residenceStateRegion$Region != "NA.", , drop = FALSE]
+df_residenceStateRegion
+```
+
+
+
+
+```{r}
+ggplot(df_residenceStateRegion, aes(x = Region, y = percent)) +
+  geom_bar(stat = "identity", fill = "blue", width = 0.7) +
+  labs(title = "Distribution of Millionaires by Regions of USA", x = "Region", y = "Percent(%)") +
+  scale_y_continuous(breaks = seq(0, max(df_industries$percent), by = 1)) 
+```
+
+
+
+
+
+
+
+
+
+
+
+
+## 4.2. Demografik analiz: Milyarderlerin yasini (age), cinsiyetini (gender) ve dogum yeri (countryOfCitizenship) demografisini arastirin.
+
+
+### Milyonerlerin vatandasi oldugu ulkelere gore dagilimi (countryOfCitizenship, unique = 62)
+
+
+countryOfCitizenship icin frekans tablosu:
+
+```{r}
+df_countryOfCitizenship <- as.data.frame(my.table(df$countryOfCitizenship))
+df_countryOfCitizenship$Citizenship <- rownames(df_countryOfCitizenship)
+```
+
+
+Cok fazla ulke var. Dusuk sayida milyoner olan ulkeleri bir araya toplayarak daha okunur bir grafik elde edilebilir.
+
+
+**Milyonerlerin %1'inden azini barindiran ulkeler:**
+
+```{r}
+low_percent_rows <- df_countryOfCitizenship[df_countryOfCitizenship$percent < 1, ]
+low_percent_rows
+```
+
+
+**Milyonerlerin %1'inden fazlasini barindiran ulkeler:**
+
+```{r}
+high_percent_rows <- df_countryOfCitizenship[!(df_countryOfCitizenship$percent < 1), ]
+high_percent_rows
+```
+
+
+**Milyonerlerin %1'inden azini barindiran ulkeleri iceren satirin olusturulmasi:**
+
+```{r}
+total_low_percent <- data.frame(
+  n = sum(low_percent_rows$n),
+  percent = sum(low_percent_rows$percent),
+  Citizenship = "Other"
+)
+```
+
+
+**Milyonerlerin %1'inden fazlasini barindiran ulkeler ile yeni satirin birlestirilmesi:**
+
+```{r}
+df_countryOfCitizenship2 <- rbind(high_percent_rows, total_low_percent)
+df_countryOfCitizenship2
+```
+
+
+bar plot
+
+```{r}
+ggplot(df_countryOfCitizenship2, aes(x = Citizenship, y = percent)) +
+  geom_bar(stat = "identity", fill = "blue", width = 0.7) +
+  coord_flip() +
+  labs(title = "Distribution of Millionaires by The Country of Citizenship", x = "Country of Citizenship", y = "Percent(%)") +
+  scale_y_continuous(breaks = seq(0, max(df_countryOfCitizenship$percent), by = 2)) 
+```
+
+
+
+
+
+
+
+
+
+
+
+
+### Milyonerlerin yaslarinin dagilimi:
+
+
+```{r}
+summary(df$age)
+hist(df$age, col = "blue", main = "Histogram Graph of Millionaires' Ages", xlab = "Age")
+```
+
+Degiskenin dagilimi normal dagilim.
+
+
+
+
+
+
+### Milyonerlerin cinsiyetlerinin dagilimi:
+
+
+```{r}
+df_gender <- as.data.frame(my.table(df$gender))
+df_gender$gender <- c("Female", "Male")
+df_gender
+```
+
+Odev verisindeki milyonerlerin %88'i erkek, %12' si kadindir.
+
+
+
+```{r}
+ggplot(df_gender, aes(x = gender, y = percent)) +
+  geom_bar(stat = "identity", fill = "blue", width = 0.7)+
+  labs(title = "Distribution of Millionaires by Gender", x = "Gender", y = "Percent(%)")+
+  scale_y_continuous(breaks = seq(0, max(df_gender$percent), by = 10)) 
+```
+
+
+
+
+
+### Milyonerlerin cinsiyetlerine gore yaslarinin karsilastirilmasi
+
+
+```{r}
+tapply(df$age, df$gender, summary)
+```
+
+Kadin milyonerlerin yas ortalamasi 65.5, erkeklerinse 64.7' dur. Her iki grubun da yas(age) verisinde eksik gozlemler vardir.
+
+
+
+Cinsiyetlere gore yas dagilimi histogram grafigi
+
+```{r}
+par(mfrow=c(1,2))
+hist(df$age[df$gender == "F"], xlab = "Age distribution of female millionaires", main = NULL, col = "blue")
+hist(df$age[df$gender == "M"], xlab = "Age distribution of male millionaires", main = NULL, ylab = NULL, col = "blue")
+par(mfrow=c(1,1))
+```
+
+Age degiskeni her iki grupta da normal dagilima sahip. 
+
+
+
+Cinsiyetlere gore yas dagilimi boxplot
+
+```{r, warning=FALSE}
+ggplot(df, aes(x = gender, y = age)) +
+  geom_boxplot(fill = "blue") +
+  labs(title = "Box plot of age distribution by gender",
+       x = "Gender",
+       y = "Age")
+```
+
+
+
+### Kadin milyonerler ile erkek milyonerlerin yas ortalamalari arasinda fark var mi?
+
+H0: Kadinlar ile erkeklerin yas ortalamalari arasinda fark yoktur.
+
+H1: Kadinlar ile erkeklerin yas ortalamalari arasinda fark vardir.
+
+Student's t test ile analiz edilir:
+
+```{r}
+t.test(df$age[df$gender == "F"], df$age[df$gender == "M"], alternative = c("two.sided"))
+```
+
+Test sonucunda H0 ret edilemez (t = 0.56, p = 0.57). Kadinlar ile erkeklerin yas ortalamalari arasinda fark yoktur.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## 4.3. Kendi kendine yapilan ve miras alinan zenginlik: Kendi kendine milyarder olanlarin ve onlarin servetini miras alan kisilerin oranini analiz edin.
+
+
+**status**: "D" kendi cabasiyla kazanilmis serveti temsil eder (Kurucular/Girisimciler), "U" ise miras veya kazanilmamis serveti gosterir.
+
+
+status icin frekans tablosu:
+
+```{r}
+df_status <- as.data.frame(my.table(df$status))
+df_status
+```
+
+Odevin verisindeki milyonerlerin %45.2' si self made milyoner, %33.7' si ise miras veya kazanilmamis servet sonucu milyonerdir. 
+
+
+### Oranlar arasinda fark var mi?
+
+Iki oranin karsilastirilmasi: Binom test, prop.test()
+
+H0: Iki oran arasinda fark yoktur.
+
+H1: Iki oran arasinda fark vardir.
+
+```{r}
+prop.test(c(df_status[1,1], df_status[6,1]), c(sum(df_status$n), sum(df_status$n)), alternative = "two.sided")
+```
+
+H0 ret edilir (ki-kare test(sd = 1) = 27.203, p < 0.01), iki oran arasinda istatistiksel olarak anlamli fark vardir.
+
+
+
+
+
+
+
+
+## 4.4. Ekonomik gostergeler: Milyarder serveti ile GSYIH, TUFE ve vergi oranlari gibi ekonomik gostergeler arasindaki korelasyonlarıi inceleyin.
+
+
+cpi_country	--> Milyarderin ulkesinin Tuketici Fiyat Endeksi (TUFE)
+
+cpi_change_country	--> Milyarderin ulkesindeki TUFE degisimi
+
+gdp_country	--> Milyarderin ulkesinin Gayri Safi Yurtici Hasilasi (GSYIH)
+
+```{r}
+for (j in colnames(df[25:27])){
+  cat(match(j, colnames(df)), j, "-->", class(df[ ,j]), 
+      "(","missing =", sum(is.na(df[j])),
+      "/", "unique =", length(unique(df[, j])), ")", "\n")
+}
+```
+
+
+gdp_country degiskeni character tipinde. Oncelikle bu degisken incelenmeli:
+
+```{r}
+df[1:10, "gdp_country"]
+```
+
+
+Eksik gozlemler uygun girilmemis. Eksik gozlemlere NA atanmasi:
+
+```{r}
+df$gdp_country <- ifelse(df$gdp_country == "", NA, df$gdp_country)
+
+sum(is.na(df$gdp_country))
+```
+
+
+gdp_country icindeki virgul ve dolar isaretlerini kaldirma
+
+gsub() fonksiyonu, bir karakter dizisi icinde belirli ifadeleri bulup degistirmek icin kullanilir. (R CookBook 7.5)
+
+
+gsub(old, new, string) --> (old: Degistirilmek istenen desen, new: yerine konacak yeni deger, string: Deseni iceren karakter dizisi veya vektor)
+
+```{r}
+df$gdp_country <- gsub("[\\$,]", "", df$gdp_country)
+df[1:20, "gdp_country"]
+```
+
+
+gdp_country'yi numeric formata cevirme:
+
+```{r}
+df$gdp_country <- as.numeric(df$gdp_country)
+```
+
+
+
+
+### Degiskenlerin dagilimlarinin incelenmesi
+
+
+```{r}
+apply(df[25:27], 2, summary)
+```
+
+
+cpi_country histogram ve kutu grafigi:
+
+Birden fazla grafige ortak ana baslik eklemek icin mtext() fonkisyonu kullanildi (https://statisticsglobe.com/common-main-title-for-multiple-plots-in-r).
+
+```{r}
+par(mfrow=c(1,2))
+hist(df$cpi_country, col = "blue", main = NULL, xlab = NULL)
+boxplot(df$cpi_country, col = "blue", main = NULL, xlab = NULL)
+mtext("Consumer Price Index (CFI) Distribution for Billionaire's Country", line = 1, adj = 1.5)
+par(mfrow=c(1,1))
+```
+
+Dagilim normal degil, cok sayida aykiri gozlem var.
+
+
+
+cpi_change_country histogram ve kutu grafigi:
+
+```{r}
+par(mfrow=c(1,2))
+hist(df$cpi_change_country, col = "blue", main = NULL, xlab = NULL)
+boxplot(df$cpi_change_country, col = "blue", main = NULL, xlab = NULL)
+mtext("CPI Change for Billionaire's Country", line = 1, adj = 12)
+par(mfrow=c(1,1))
+```
+
+Dagilim normal degil, 1 tane aykiri gozlem var.
+
+
+
+gdp_country histogram ve kutu grafigi:
+
+```{r}
+par(mfrow=c(1,2))
+hist(df$gdp_country, col = "blue", main = NULL, xlab = NULL)
+boxplot(df$gdp_country, col = "blue", main = NULL, xlab = NULL)
+mtext("Gross Domestic Product (GDP) for Billionaire's Country", line = 1, adj = 2)
+par(mfrow=c(1,1))
+```
+
+Dagilim normal degil, aykiri deger yok.
+
+
+
+
+### Degiskenler arasi korelasyonlar
+
+Degiskenler normal dagilim gostermediginden, Spearman korelasyon analizi ile incelendi.
+
+H0: Degiskenler arasinda korelasyon yoktur.
+
+H1: Degiskenler arasinda korelasyon vardir.
+
+
+cpi_country ile cpi_change_country arasindaki korelasyon:
+
+```{r}
+cor.test(df$cpi_country, df$cpi_change_country, method = "spearman")
+```
+
+H0 ret edilir (S = 80030934, p < 0.01), iki degisken arasindaki korelasyon istatistiksel olarak anlamlidir. Iki degisken arasinda pozitif yonde zayif iliski vardir (r = 0.40).
+
+
+```{r}
+plot(df$cpi_country, df$cpi_change_country, xlab = "CPI for Billionaire's Country", ylab = "CPI Change for Billionaire's Country")
+```
+
+
+
+
+
+
+cpi_country ile gdp_country arasindaki korelasyon:
+
+```{r}
+cor.test(df$cpi_country, df$gdp_country, method = "spearman")
+```
+
+H0 ret edilir (S = 147605010, p < 0.01), iki degisken arasindaki korelasyon istatistiksel olarak anlamlidir. Iki degisken arasinda negatif yonde cok zayif iliski vardir (r = -0.10).
+
+
+```{r}
+plot(df$cpi_country, df$gdp_country, xlab = "CPI for Billionaire's Country", ylab = "GDP for Billionaire's Country")
+```
+
+
+
+
+cpi_change_country ile gdp_country arasindaki korelasyon:
+
+```{r}
+cor.test(df$cpi_change_country, df$gdp_country, method = "spearman")
+```
+
+H0 ret edilir (S = 53382027, p < 0.01), iki degisken arasindaki korelasyon istatistiksel olarak anlamlidir. Iki degisken arasinda pozitif yonde orta gucte iliski vardir (r = 0.60).
+
+
+```{r}
+plot(df$cpi_change_country, df$gdp_country, xlab = "CPI Change for Billionaire's Country", ylab = "GDP for Billionaire's Country")
+```
+
+
+
+
+
+
+
+
+
+
+## 4.5. Mekansal analiz: Milyarderlerin cografi dagilimini(country) ve servetlerini (finalWorth) bir harita uzerinde gorsellestirin.
+
+
+finalWorth degiskeninin dagilimi:
+
+```{r}
+summary(df$finalWorth)
+```
+
+
+```{r}
+ggplot(df) +
+  geom_histogram(aes(x = finalWorth), bins = 10, fill = "blue") +
+  scale_x_continuous(breaks = seq(0, max(df$finalWorth), by = 20000)) +
+  labs(title = "Histogram of Final Net Worth of Billionaires in U.S. Dollars", x = "Final Net Worth")
+```
+
+Veride bulunan az sayidaki multimilyarder, finalWorth degiskeninin dagiliminin carpik olmasina neden olmaktadir.
+
+
+
+### Ikamet edilen ulkeye gore final net deger dagilimi
+
+Cok fazla ulke var (unique = 62). Oncelikle dusuk sayida milyoner olan ulkeler bir araya toplanacaktir.
+
+
+Milyonerlerin %1'inden fazlasini barindiran ulkeler:
+
+```{r}
+high_percent_rows
+```
+
+
+
+Milyonerlerin %1'inden fazlasini barindiran ulkelerin listesi:
+
+```{r}
+df_worth <- df[, c(2,6)]
+high_name <- rownames(high_percent_rows2)
+high_name <- gsub("[\\.]", " ", high_name)
+high_name
+```
+
+
+
+
+Milyonerlerin %1'inden fazlasini barindiran ulkelerin disinda kalanlarin "Other Countries" olarak atanmasi:
+
+```{r}
+df_worth$new_country <- df_worth$country
+df_worth[1:5,]
+
+
+# high_name'deki ulkelerin disinda kalanlar 
+for (j in seq_along(df_worth$new_country)) {
+  if (!(df_worth$new_country[j] %in% high_name)) {
+    df_worth$new_country[j] <- "Other Countries"
+  }
+}
+```
+
+```{r}
+length(unique(df_worth$country))
+```
+
+```{r}
+length(unique(df_worth$new_country))
+```
+
+
+
+
+```{r}
+ggplot(df_worth, aes(x = factor(new_country), y = finalWorth)) +
+  geom_boxplot(fill = "blue") + 
+  coord_flip() +
+  labs(title = "The Distribution of Final Net Worth by Country of Residence", x = "Country of Residence", y = "Final Net Worth") +
+  scale_y_continuous(breaks = seq(0, max(df_worth$finalWorth), by = 20000)) 
+```
+
+finalWorth eksenini daha kisa cizerek, boxplot'lari gorunur hale getirebiliriz.
+
+
+Bunun icin scale_y_continuous() fonsiyonunda limits argumani kullanilir:
+
+```{r,warning=FALSE}
+ggplot(df_worth, aes(x = factor(new_country), y = finalWorth)) +
+  geom_boxplot(fill = "blue") + 
+  coord_flip() +
+  labs(title = "The Distribution of Final Net Worth by Country of Residence", x = "Country of Residence", y = "Final Net Worth") +
+  scale_y_continuous(breaks = seq(1000, 10000, by = 1000), limits = c(1000, 10000))
+```
+
+Fransa ortalamanin ustunde net degeri olan milyonerler yasamaktadir. Ilgili boxplot diger ulkelere gore oldukca genis.
+
+
+Fransa' yi South Korea, US, Taiwan, Brazil, Israel ve Italy izlemektedir. Bu ulkelerde ikamet eden milyonerlerin net degerleri, diger ulkelere gore daha yuksektir. 
+
+
+
+
+
+
+
+
+
+## 4.6. Zaman icindeki egilimler: Milyarder demografisindeki ve zenginlikteki yillar icindeki degisiklikleri izleyin. 
+
+Veride farkli zamanlarda tekrarli olculmus bir degisken yok (yillar icindeki degisiklikleri izleyin), zaman olarak kullanilmaya uygun degiskeni bulamadim. Bu nedenle milyonerlerin yaslari ile net degerleri arasindaki iliskiyi inceledim.
+
+
+Yas ile net deger degiskenlerinin sacilim grafigi:
+
+```{r,warning=FALSE}
+ggplot(df, aes(x = age, y = finalWorth)) + 
+  geom_point(color = "blue", size=2)+
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE, color = "red") +  # regresyon dogrusunu ekler
+  labs(title ="The Relationship Between Age and Networth", x = "Age", y = "Final Net Worth")
+```
+
+Grafikte iki degisken arasindaki korelasyonun zayif oldugu gorulebiliyor. Yasin artmasi ile birlikte net degerde de artis gorulmuyor.
+
+
+```{r}
+cor.test(df$age, df$finalWorth, method = "spearman")
+```
+
+Korelasyon testinin sonuclari da degiskenler arasinda istatistiksel olarak anlamli ancak zayif korelasyon oldugunu gosteriyor (r = 0.16, p < 0.01). 
+
+
+
+
+Net degeri 10000 dolarin altinda olanlarin sacilim grafigi:
+
+```{r,warning=FALSE}
+ggplot(df, aes(x = age, y = finalWorth)) + 
+  geom_point(color = "blue", size=2)+
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE, color = "red") +
+  labs(title ="The Relationship Between Age and Networth", x = "Country of Residence", y = "Final Net Worth") +
+  scale_y_continuous(breaks = seq(1000, 10000, by = 1000), limits = c(1000, 10000))
+```
+
+Net degeri yuksek milyonerlerin cikarilmasiyla degiskenler arasi korelasyon yukselmistir. Yas arttikca net degerde de artis goruluyor. Aralarinda dusuk/orta siddette korelasyon var.
+
+
+
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+
+
+```{r,warning=FALSE,message=FALSE,results='hide'}
+
+```
